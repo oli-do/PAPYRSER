@@ -1,0 +1,7 @@
+export
+papyri_data
+additional_scripts
+dev
+*.env
+log.txt
+.idea/
