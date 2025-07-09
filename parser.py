@@ -301,7 +301,7 @@ class TEIParser:
                     try:
                         return ''.join(["-" for _ in range((int(attr['atLeast']) + int(attr['atMost'])) // 2)])
                     except KeyError:
-                        return ''
+                        return '[?]'
             elif 'quantity' in attr:
                 quantity = int(attr['quantity'])
                 return '[' + ''.join(["-" for _ in range(quantity)]) + ']'
