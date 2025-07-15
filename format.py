@@ -30,6 +30,10 @@ class Formatter:
             self.logger.debug(f'format_line: Received line text {line_text}')
         # Remove \u2069
         line_text = line_text.replace('\u2069', '')
+        # Remove <space> / vacat at the beginning and end of a line
+        line_text = line_text.strip()
+        line_text = re.sub(r'^(?:\? )+', '', line_text)
+        line_text = re.sub(r'(?: \?)+$', '', line_text)
         # Remove lonely brackets
         if re.match(r'^[\[\]\-?]+$', line_text):
             only_gap_illegible_chars = re.sub(r'\[-+]', '', line_text)
@@ -50,6 +54,8 @@ class Formatter:
             line_text = line_text.replace(string, f'[{filler}]')
         # combine [?] preceded or followed by gap in text
         line_text = re.sub(r'(\[-+])*\[\?](\[-+])*', '[?]', line_text)
+        # Replace multiple [?] with single [?]
+        line_text = re.sub(r'\[\?]{2,}', '[?]', line_text)
         # handle multiple ℅
         line_text = re.sub('℅+', '℅', line_text)
         if debug_mode:

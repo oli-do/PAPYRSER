@@ -45,6 +45,9 @@ The **D5** standard represents an advancement of the **D4** standard previously 
 - **\<gap>** or **\<supplied>** (end of line) → [
 - **\<gap extent="unknown">** → [?]
 - **\<gap reason="illegible">** → e.g. **-----** where each minus represents one character
+- **\<space extent="unknown">** → ' ? '
+- **\<space quantity="3" unit="character">** -> '   ' (3 whitespaces)
+- **\<space atLeast="4" atMost="7" unit="character">** -> '      ' (6 whitespaces - rounded mean)
 - **\<unclear>** → character + combining dot below (0x0323)
 - **\<milestone>** → new line + matching character
 - **\<ex>** → matching symbol (if **\<expan>** does not contain text as direct child)

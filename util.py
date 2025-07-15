@@ -49,7 +49,7 @@ def convert_to_standardized_majuscule(input_str):
     return re.sub(r"[ʼ†∙·•{}()',;:.\-⏑̆͂᾽᾿῎῞῾`΄“”’̓ʽ‘⌊⌋\n ]", '', input_str)
 
 
-def get_paths_to_tm(tm: int) -> list:
+def get_paths_to_tm(tm: int) -> list[str]:
     """
     Gets the path to every idp.data-master XML file matching the TM Number specified by tm.
     :param tm: TM number
@@ -163,11 +163,12 @@ class IOHandler:
             print(msg)
             exit(1)
 
-    def write_to_json(self, tm: int, content: list[list[str]]) -> str:
+    def write_to_json(self, tm: int, original_filename: str, content: list[list[str]]) -> str:
         """
         Writes parsed data to a json file with metadata in head, text parts in body. See documentation for detailed info
         on the json structure.
         :param tm: TM number
+        :param original_filename: Name of the XML file the parser results are based on
         :param content: parser results returned by convert_to_d4
         :return: Path to the written file
         """
@@ -176,7 +177,7 @@ class IOHandler:
         self.create_folder(target_path)
         target_path = os.path.join(target_path, 'json')
         self.create_folder(target_path)
-        path = os.path.join(target_path, f'{str(tm)}.json')
+        path = os.path.join(target_path, f'{tm}_{original_filename}.json')
         total_len = len(sum(content, []))
         head = {'tm': tm, 'textparts': len(content), 'lines': total_len, 'version': 'D4'}
         body = []
@@ -186,10 +187,11 @@ class IOHandler:
         self.write_text_to_file(path, json.dumps(content, ensure_ascii=False))
         return path
 
-    def write_to_txt(self, tm: int, content: list[list[str]]) -> str:
+    def write_to_txt(self, tm: int, original_filename: str, content: list[list[str]]) -> str:
         """
         Writes parsed data to a txt file.
         :param tm: TM number
+        :param original_filename: Name of the XML file the parser results are based on
         :param content: parser results returned by convert_to_d4
         :return: Path to the written file
         """
@@ -198,7 +200,7 @@ class IOHandler:
         self.create_folder(target_path)
         target_path = os.path.join(target_path, 'txt')
         self.create_folder(target_path)
-        path = os.path.join(target_path, f'{str(tm)}.txt')
+        path = os.path.join(target_path, f'{tm}_{original_filename}.txt')
         if os.path.exists(path):
             os.remove(path)
         for i in range(len(content)):

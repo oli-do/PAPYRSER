@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 
 from bs4 import BeautifulSoup, Tag
@@ -32,7 +33,9 @@ class TEIParser:
             if debug_mode:
                 self.logger.error(msg)
             return msg
-        for file in files:
+        for i in range(len(files)):
+            file = files[i]
+            filename = file.split(os.sep)[-1].replace('.xml', '')
             if debug_mode:
                 self.logger.info(f'\n\n### Processing {file} (TM {tm}) ###')
             try:
@@ -49,11 +52,11 @@ class TEIParser:
                 if debug_mode:
                     self.logger.info(f'Output ready to write: {output_data}')
                 if self.write_to_json:
-                    path = self.io_handler.write_to_json(tm, output_data)
+                    path = self.io_handler.write_to_json(tm, filename, output_data)
                     if debug_mode:
                         self.logger.info(f'self.io_handler wrote {path}')
                 if self.write_to_txt:
-                    path = self.io_handler.write_to_txt(tm, output_data)
+                    path = self.io_handler.write_to_txt(tm, filename, output_data)
                     if debug_mode:
                         self.logger.info(f'self.io_handler wrote {path}')
             else:
@@ -140,7 +143,10 @@ class TEIParser:
         # handled; else: in case of children, transform() if a NavigableString is found, else call parse_contents
         if not contents or sibling_name in ['expan', 'supplied', 'subst', 'add']:
             parsed += self.transform(sibling_name, sibling.attrs, sibling.text.strip(), sibling, parent_name)
-            return parsed.replace(' ', '')
+            if sibling_name == 'space':
+                return parsed
+            else:
+                return parsed.replace(' ', '')
         else:
             for child in contents:
                 if isinstance(child, NavigableString):
@@ -164,6 +170,8 @@ class TEIParser:
             return '\n'
         elif tag == 'gap':
             return self.gap(attrs)
+        elif tag == 'space':
+            return self.space(attrs)
         elif tag == 'supplied':
             supplied_text = ''
             for child in node.children:
@@ -299,7 +307,7 @@ class TEIParser:
                     return ''.join(["-" for _ in range(quantity)])
                 else:
                     try:
-                        return ''.join(["-" for _ in range((int(attr['atLeast']) + int(attr['atMost'])) // 2)])
+                        return ''.join(["-" for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) // 2))])
                     except KeyError:
                         return '[?]'
             elif 'quantity' in attr:
@@ -311,11 +319,33 @@ class TEIParser:
                 else:
                     return ''
             elif 'atLeast' in attr:
-                return ''.join(["-" for _ in range((int(attr['atLeast']) + int(attr['atMost'])) // 2)])
+                return ''.join(["-" for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) // 2))])
             else:
                 return '[?]'
         except KeyError:
             return '[?]'
+
+    @staticmethod
+    def space(attr: dict):
+        """
+        Handles <space>.
+        :param attr: Attributes of <space>
+        :return: String representation of <space>
+        """
+        try:
+            if attr['unit'] == 'line':
+                return ''
+            elif 'quantity' in attr:
+                quantity = int(attr['quantity'])
+                return ''.join([" " for _ in range(quantity)]) + ']'
+            elif 'atLeast' in attr:
+                return ''.join([" " for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) // 2))])
+            elif 'extent' in attr:
+                return ' ? '
+            else:
+                return ''
+        except KeyError:
+            return ' ? '
 
     @staticmethod
     def supplied(text: str, attrs: dict):
