@@ -67,18 +67,22 @@ class TEIParser:
                 self.formatter.error_log = []
                 return msg_include_formatter
 
-    def convert_to_d5(self, file_path: str) -> (list[list[str]], list[str]):
+    def convert_to_d5(self, file_path: str, test: bool = False) -> (list[list[str]], list[str]):
         """
         Converts XML TEI to the D4 standard.
         :param file_path: Path to the XML file whose content is to be converted.
+        :param test: for unittest
         :return: A list of lists. Each list of string represents a text part, i.e. every line as string contained in TEI
         <ab> tags; list of errors.
         """
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                file = f.read()
-        except FileNotFoundError as e:
-            return [], [str(e)]
+        if not test:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    file = f.read()
+            except FileNotFoundError as e:
+                return [], [str(e)]
+        else:
+            file = file_path
         soup = BeautifulSoup(file, 'lxml-xml')
         self.formatter.get_languages(soup)
         text_parts = soup.find_all('ab')
@@ -88,7 +92,7 @@ class TEIParser:
             try:
                 line = ab_soup.find_all('lb')[0]
             except IndexError:
-                return []
+                continue
             # Uses the sibling by sibling approach to parse the contents of <ab>
             sibling = line.next_sibling
             text: str = ''
@@ -141,7 +145,7 @@ class TEIParser:
         contents = sibling.contents
         # expan, supplied, subst and add are handled by transform(), tags without children (= no contents) are equally
         # handled; else: in case of children, transform() if a NavigableString is found, else call parse_contents
-        if not contents or sibling_name in ['expan', 'supplied', 'subst', 'add']:
+        if not contents or sibling_name in ['expan', 'supplied', 'subst', 'add', 'gap', 'hi']:
             parsed += self.transform(sibling_name, sibling.attrs, sibling.text.strip(), sibling, parent_name)
             if sibling_name == 'space':
                 return parsed
@@ -225,6 +229,11 @@ class TEIParser:
             subst_text = ''
             for child in node.children:
                 if isinstance(child, Tag):
+                    if child.name == 'add':
+                        if isinstance(child, Tag):
+                            if child.attrs['place'] == 'inline':
+                                subst_text = convert_to_standardized_majuscule(child.text)
+                                break
                     if child.name == 'del':
                         for c in child.contents:
                             if isinstance(c, NavigableString):
@@ -245,7 +254,25 @@ class TEIParser:
         elif tag == 'abbr':
             return text
         elif tag == 'hi':
-            return self.hi(attrs, text)
+            children = node.children
+            child_hi = ''
+            for child in children:
+                if isinstance(child, Tag):
+                    if child.name == 'hi':
+                        child_hi = self.hi(child.attrs, '')
+                        current_hi = self.hi(attrs, '')
+                        for content in child.contents:
+                            if isinstance(content, NavigableString):
+                                return (convert_to_standardized_majuscule(child.text)) + current_hi + child_hi
+                            elif isinstance(content, Tag):
+                                return self.transform(content.name, content.attrs, content.text, content, content.parent.name) + current_hi + child_hi
+                    elif child.name == 'gap':
+                        text = self.gap(child.attrs)
+                        return self.hi(attrs, text)
+            if not child_hi:
+                return self.hi(attrs, text)
+        elif tag == 'q':
+            return text
         else:
             return ''
 
@@ -307,7 +334,7 @@ class TEIParser:
                     return ''.join(["-" for _ in range(quantity)])
                 else:
                     try:
-                        return ''.join(["-" for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) // 2))])
+                        return ''.join(["-" for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) / 2))])
                     except KeyError:
                         return '[?]'
             elif 'quantity' in attr:
@@ -319,7 +346,8 @@ class TEIParser:
                 else:
                     return ''
             elif 'atLeast' in attr:
-                return ''.join(["-" for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) // 2))])
+                return ('[' + ''.join(["-" for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) / 2))])
+                        + ']')
             else:
                 return '[?]'
         except KeyError:
@@ -337,9 +365,9 @@ class TEIParser:
                 return ''
             elif 'quantity' in attr:
                 quantity = int(attr['quantity'])
-                return ''.join([" " for _ in range(quantity)]) + ']'
+                return ''.join([" " for _ in range(quantity)])
             elif 'atLeast' in attr:
-                return ''.join([" " for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) // 2))])
+                return ''.join([" " for _ in range(round((int(attr['atLeast']) + int(attr['atMost'])) / 2))])
             elif 'extent' in attr:
                 return ' ? '
             else:
@@ -382,7 +410,7 @@ class TEIParser:
             unicode_map = {
                 "paragraphos": '\n\u2e0f',
                 "horizontal-rule": '\n\u2015',
-                "diple-obelismene": '\n\u1F92',
+                "diple-obelismene": '\n\u2E10',
                 "wavy-line": '\n\u223C',
                 "coronis": '\n\u2E0E'
             }

@@ -55,9 +55,11 @@ class Formatter:
         # combine [?] preceded or followed by gap in text
         line_text = re.sub(r'(\[-+])*\[\?](\[-+])*', '[?]', line_text)
         # Replace multiple [?] with single [?]
-        line_text = re.sub(r'\[\?]{2,}', '[?]', line_text)
+        line_text = re.sub(r'(?:\[\?]){2,}', '[?]', line_text)
         # handle multiple ℅
         line_text = re.sub('℅+', '℅', line_text)
+        # make sure only capital letters exist (specifically in case of forbidden characters)
+        line_text = line_text.upper()
         if debug_mode:
             self.logger.debug(f'format_line: Returns line text {line_text}')
         return line_text
