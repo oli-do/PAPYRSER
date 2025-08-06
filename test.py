@@ -1,8 +1,10 @@
 import unittest
+
 from bs4 import BeautifulSoup
-from format import Formatter
-from parser import TEIParser
-from util import IOHandler
+
+from papyrser_core.format import Formatter
+from papyrser_core.parser import TEIParser
+from papyrser_io.handler import IOHandler
 
 
 class TestFormatter(unittest.TestCase):
@@ -62,10 +64,12 @@ class TestFormatter(unittest.TestCase):
 class TestTEIParser(unittest.TestCase):
     @staticmethod
     def convert(xml_input: str):
-        xml = f'<ab><lb n="1"/>Α{xml_input}Β</ab>'
+        xml = f'<div n="test" subtype="unittest"><ab><lb n="1"/>Α{xml_input}Β</ab></div>'
         io_handler = IOHandler()
         parser = TEIParser(io_handler)
-        return parser.convert_to_d5(xml, True)
+        results = parser.convert_to_d5(xml, True)
+        lines = [data['lines'] for data in results]
+        return lines
 
     def test_convert_to_d5_gap(self):
         test = self.convert('<gap reason="lost" atLeast="11" atMost="15" unit="character"/>')
@@ -132,9 +136,11 @@ class TestTEIParser(unittest.TestCase):
         self.assertEqual([['Α-̈Β']], test)
         test = self.convert('<hi rend="acute"><gap reason="lost" quantity="1" unit="character"/></hi>')
         self.assertEqual([['Α[-]́Β']], test)
-        test = self.convert('<hi rend="asper"><hi rend="acute"><gap reason="illegible" quantity="1" unit="character"/></hi></hi>')
+        test = self.convert(
+            '<hi rend="asper"><hi rend="acute"><gap reason="illegible" quantity="1" unit="character"/></hi></hi>')
         self.assertEqual([['Α-̔́Β']], test)
-        test = self.convert('<hi rend="asper"><hi rend="acute"><gap reason="lost" quantity="1" unit="character"/></hi></hi>')
+        test = self.convert(
+            '<hi rend="asper"><hi rend="acute"><gap reason="lost" quantity="1" unit="character"/></hi></hi>')
         self.assertEqual([['Α[-]̔́Β']], test)
 
     def test_convert_to_d5_supplied(self):

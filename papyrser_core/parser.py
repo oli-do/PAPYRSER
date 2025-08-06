@@ -3,11 +3,13 @@ import os
 import re
 
 from bs4 import BeautifulSoup, Tag
-from bs4.element import NavigableString, PageElement
+from bs4.element import NavigableString, PageElement, ResultSet
+from lxml import etree
 
 from config import debug_mode, ignore_formatting_issues, write_to_json, write_to_txt
-from format import Formatter
-from util import get_paths_to_tm, convert_to_standardized_majuscule, IOHandler
+from papyrser_core.format import Formatter
+from papyrser_io.handler import IOHandler
+from papyrser_utils.utils import get_paths_to_tm, convert_to_standardized_majuscule, ns
 
 
 class TEIParser:
@@ -22,7 +24,29 @@ class TEIParser:
         self.write_to_txt = write_to_txt
         self.formatter = Formatter()
 
-    def process_tei(self, tm) -> str:
+    @staticmethod
+    def __set_filename(file: str):
+        if 'DDB_EpiDoc_XML' in file:
+            return file.split(os.sep)[-1].replace('.xml', '')
+        else:
+            root = etree.parse(file)
+            dclp_hybrid = root.xpath('//tei:publicationStmt/tei:idno[@type="dclp-hybrid"]/text()', namespaces=ns)
+            if dclp_hybrid:
+                dclp_hybrid = str(dclp_hybrid[0]).replace(';;', '.').replace(',', '+')
+            title = root.xpath('//tei:titleStmt/tei:title/text()', namespaces=ns)
+            if title:
+                title = str(title[0]).replace(' ', '')
+                title = ''.join(re.findall(r'[a-zA-Z0-9,.-]', title))
+                title = title.replace(',', '+')
+            filename = root.xpath('//tei:publicationStmt/tei:idno[@type="filename"]/text()', namespaces=ns)[0]
+            if dclp_hybrid:
+                return dclp_hybrid
+            elif title:
+                return title
+            else:
+                return filename
+
+    def process_tei(self, tm) -> str | None:
         """
         Starts the conversion process.
         :return: Error message in case of formatting errors
@@ -35,28 +59,30 @@ class TEIParser:
             return msg
         for i in range(len(files)):
             file = files[i]
-            filename = file.split(os.sep)[-1].replace('.xml', '')
+            filename = self.__set_filename(file)
             if debug_mode:
                 self.logger.info(f'\n\n### Processing {file} (TM {tm}) ###')
             try:
                 output_data = self.convert_to_d5(str(file))
+                lines = [data['lines'] for data in output_data]
+                div_data = [data['div_data'] for data in output_data]
             except ValueError as e:
                 if debug_mode:
                     self.logger.error(str(e))
                 return str(e)
-            if not output_data:
+            if not lines:
                 if debug_mode:
                     self.logger.info('convert_to_d5 returned no data.')
                 continue
             if not self.formatter.error_log or ignore_formatting_issues:
                 if debug_mode:
-                    self.logger.info(f'Output ready to write: {output_data}')
+                    self.logger.info(f'Output ready to write: {lines}')
                 if self.write_to_json:
-                    path = self.io_handler.write_to_json(tm, filename, output_data)
+                    path = self.io_handler.write_to_json(tm, filename, lines, div_data)
                     if debug_mode:
                         self.logger.info(f'self.io_handler wrote {path}')
                 if self.write_to_txt:
-                    path = self.io_handler.write_to_txt(tm, filename, output_data)
+                    path = self.io_handler.write_to_txt(tm, filename, lines)
                     if debug_mode:
                         self.logger.info(f'self.io_handler wrote {path}')
             else:
@@ -67,7 +93,32 @@ class TEIParser:
                 self.formatter.error_log = []
                 return msg_include_formatter
 
-    def convert_to_d5(self, file_path: str, test: bool = False) -> (list[list[str]], list[str]):
+    @staticmethod
+    def find_graphic_url(cust_events: ResultSet, corresp: str):
+        for event in cust_events:
+            event_corresp = event.get('corresp')
+            if event_corresp:
+                if corresp in event_corresp:
+                    graphic = event.find('graphic')
+                    if graphic:
+                        graphic_url = graphic.get('url')
+                        return graphic_url
+        return ''
+
+    @staticmethod
+    def find_invno(idnos: ResultSet, corresp: str):
+        for idno in idnos:
+            xml_id = idno.get('xml:id')
+            idno_corresp = idno.get('corresp')
+            if xml_id:
+                if corresp.replace('#', '') in xml_id:
+                    return idno.text
+            elif idno_corresp:
+                if corresp in idno_corresp:
+                    return idno.text
+        return ''
+
+    def convert_to_d5(self, file_path: str, test: bool = False) -> (list[dict], list[str]):
         """
         Converts XML TEI to the D4 standard.
         :param file_path: Path to the XML file whose content is to be converted.
@@ -84,10 +135,21 @@ class TEIParser:
         else:
             file = file_path
         soup = BeautifulSoup(file, 'lxml-xml')
+        cust_events = soup.find_all('custEvent')
+        inv_nos = soup.find_all('idno', attrs={'type': 'invNo'})
         self.formatter.get_languages(soup)
         text_parts = soup.find_all('ab')
         output = []
+        graphic_url = ''
+        inv_no = ''
         for ab in text_parts:
+            div = ab.find_parent('div')
+            div_name = div.get('n')
+            div_subtype = div.get('subtype')
+            corresp = div.get('corresp')
+            if corresp:
+                graphic_url = self.find_graphic_url(cust_events, corresp)
+                inv_no = self.find_invno(inv_nos, corresp)
             ab_soup = BeautifulSoup(str(ab), 'lxml-xml')
             try:
                 line = ab_soup.find_all('lb')[0]
@@ -124,8 +186,11 @@ class TEIParser:
                 if line_text[i] == '':
                     continue
                 line_text[i] = self.formatter.validate_line(line_text[i])
-            output.append(list(filter(None, line_text)))
-        return list(filter(None, output))
+            div_data = {'div_name': div_name, 'div_subtype': div_subtype, 'inv_no': inv_no,
+                        'graphic_url': graphic_url}
+            lines = list(filter(None, line_text))
+            output.append({'lines': lines, 'div_data': div_data})
+        return output
 
     def parse_contents(self, sibling: Tag | PageElement, parsed='', parent_name='') -> str:
         """
@@ -265,7 +330,8 @@ class TEIParser:
                             if isinstance(content, NavigableString):
                                 return (convert_to_standardized_majuscule(child.text)) + current_hi + child_hi
                             elif isinstance(content, Tag):
-                                return self.transform(content.name, content.attrs, content.text, content, content.parent.name) + current_hi + child_hi
+                                return self.transform(content.name, content.attrs, content.text, content,
+                                                      content.parent.name) + current_hi + child_hi
                     elif child.name == 'gap':
                         text = self.gap(child.attrs)
                         return self.hi(attrs, text)

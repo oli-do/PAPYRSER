@@ -2,17 +2,21 @@ import glob
 import logging
 import os
 from multiprocessing import Pool
+from typing import cast
 
 from tqdm import tqdm
 
 from config import (idp_data_path, tm_index_path, papyri_data_path, debug_mode, papyrus_target, always_update_github,
-                    always_do_indexing)
+                    always_do_indexing, main_path)
+from papyrser_core.parser import TEIParser
+from papyrser_io.downloader import PapyriDownloader
+from papyrser_io.handler import IOHandler
+from papyrser_io.pap_filter import PapyrusFilter
+from papyrser_utils.utils import get_tm_from_paths, setup_logging, before_running
 
-from parser import TEIParser
-from util import PapyriDownloader, IOHandler, get_tm_from_paths, main_path, setup_logging, before_running
+logger = logging.getLogger(f"{__name__}")
 
-
-def run(target: int | list[int] | str | list[str]):
+def run(target: int | list[int] | str | list[str] | PapyrusFilter):
     """
     Initialization method for GitHub sync and conversion processes. Automatically switches to multiprocessing if the CPU
     count is greater or equal the number of texts which are to be processed and if debug_mode is set to False.
@@ -28,6 +32,9 @@ def run(target: int | list[int] | str | list[str]):
         downloader.download_github_data()
     if not os.path.exists(tm_index_path) or always_do_indexing:
         downloader.index_tm_numbers()
+    if isinstance(target, PapyrusFilter):
+        io_handler.set_export_directory(target.name)
+        target = target.filter()
     if isinstance(target, int):
         io_handler.set_export_directory(str(target))
         target = [target]
@@ -35,11 +42,13 @@ def run(target: int | list[int] | str | list[str]):
         types = list(set(type(x) for x in target))
         if len(types) == 1 and types[0] == int:
             target.sort()
-            io_handler.set_export_directory(f'{target[0]}-{target[-1]}')
+            if not io_handler.export_directory:
+                io_handler.set_export_directory(f'{target[0]}-{target[-1]}')
         elif len(types) == 1 and types[0] == str:
             collections = os.listdir(os.path.join(idp_data_path, 'DDB_EpiDoc_XML'))
             files = []
             for collection in target:
+                collection = cast(str, collection)
                 if collection.lower() in collections:
                     files += glob.glob(os.path.join(idp_data_path, f'DDB_EpiDoc_XML/{collection.lower()}/**/*.xml'))
                 else:
@@ -72,7 +81,7 @@ def run(target: int | list[int] | str | list[str]):
     if len(target) > 1:
         target = list(set(target))
     if len(target) > os.cpu_count() and not debug_mode:
-        pool = Pool(os.cpu_count())
+        pool = Pool(os.cpu_count() + 1)
         bar = tqdm(total=len(target), desc='Parsing')
         for skipped in pool.imap_unordered(parser.process_tei, target):
             if skipped:
@@ -84,9 +93,13 @@ def run(target: int | list[int] | str | list[str]):
             if skipped and not debug_mode:
                 logger.warning(skipped)
 
+def initialize(target=None):
+    if target is None:
+        target = papyrus_target
+    setup_logging()
+    before_running()
+    run(target)
+
 
 if __name__ == '__main__':
-    setup_logging()
-    logger = logging.getLogger(f"{__name__}")
-    before_running()
-    run(papyrus_target)
+    initialize()

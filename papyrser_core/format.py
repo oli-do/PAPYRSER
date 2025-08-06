@@ -4,7 +4,7 @@ import re
 from bs4 import BeautifulSoup
 
 from config import debug_mode
-from util import greek_output
+from papyrser_utils.utils import greek_output
 
 
 class Formatter:
