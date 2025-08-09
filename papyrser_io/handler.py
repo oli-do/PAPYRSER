@@ -75,7 +75,7 @@ class IOHandler:
             data['text'] = content[i]
             text_blocks.append(data)
         content = {'text_blocks': text_blocks}
-        self.write_text_to_file(path, json.dumps(content, ensure_ascii=False))
+        self.write_text_to_file(path, json.dumps(content, ensure_ascii=False, indent=4))
         return path
 
     def write_to_txt(self, tm: int, original_filename: str, content: list[list[str]]) -> str:
