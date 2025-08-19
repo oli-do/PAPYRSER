@@ -8,7 +8,7 @@ Developed by [Oliver Donath](https://github.com/oli-do).
 
 ## Running PAPYRSER
 ### Requirements
-- Valid installation of **Python 3** (Python 3.9 or newer is recommended)
+- Valid installation of **Python 3** (Python 3.9 or newer is required)
 - Installation of packages listed in **requirements.txt** (install via "pip install -r requirements.txt" if necessary)
 
 ### Configuration
