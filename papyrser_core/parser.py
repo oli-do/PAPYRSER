@@ -299,7 +299,7 @@ class TEIParser:
                             if child.attrs['place'] == 'inline':
                                 for content in child.contents:
                                     if isinstance(content, NavigableString):
-                                        subst_text += convert_to_standardized_majuscule(child.text)
+                                        subst_text += convert_to_standardized_majuscule(content)
                                     elif isinstance(content, Tag):
                                         subst_text += self.parse_contents(content)
                                 break
