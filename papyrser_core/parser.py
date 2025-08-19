@@ -118,7 +118,7 @@ class TEIParser:
                     return idno.text
         return ''
 
-    def convert_to_d5(self, file_path: str, test: bool = False) -> (list[dict], list[str]):
+    def convert_to_d5(self, file_path: str, test: bool = False) -> tuple[list[dict], list[str]] | list[dict]:
         """
         Converts XML TEI to the D4 standard.
         :param file_path: Path to the XML file whose content is to be converted.
@@ -131,7 +131,7 @@ class TEIParser:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     file = f.read()
             except FileNotFoundError as e:
-                return [], [str(e)]
+                return [{}], [str(e)]
         else:
             file = file_path
         soup = BeautifulSoup(file, 'lxml-xml')
@@ -224,7 +224,7 @@ class TEIParser:
                     parsed += self.parse_contents(child, parent_name=sibling.name)
         return parsed.replace(' ', '')
 
-    def transform(self, tag: str, attrs: dict, text: str, node: PageElement | Tag, parent_name: str) -> str:
+    def transform(self, tag: str, attrs: dict, text: str, node: PageElement | Tag, parent_name: str) -> None | str:
         """
         Transforms XML elements according to the D4 standard.
         :param tag: Name of the tag
@@ -297,7 +297,11 @@ class TEIParser:
                     if child.name == 'add':
                         if isinstance(child, Tag):
                             if child.attrs['place'] == 'inline':
-                                subst_text = convert_to_standardized_majuscule(child.text)
+                                for content in child.contents:
+                                    if isinstance(content, NavigableString):
+                                        subst_text += convert_to_standardized_majuscule(child.text)
+                                    elif isinstance(content, Tag):
+                                        subst_text += self.parse_contents(content)
                                 break
                     if child.name == 'del':
                         for c in child.contents:
@@ -305,7 +309,6 @@ class TEIParser:
                                 subst_text += convert_to_standardized_majuscule(c.strip())
                             elif isinstance(c, Tag):
                                 subst_text += self.parse_contents(c, parent_name='subst')
-            subst_text = re.sub(r'\[-+]', '', subst_text)
             return subst_text
         elif tag == 'del':
             if parent_name == 'subst':
