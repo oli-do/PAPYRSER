@@ -100,7 +100,7 @@ class Formatter:
             '\u00B7\u2E13\u007E\u23AB\u23A7\u037D\u2E16')
         hi_chars = '\u0308\u0314\u0301\u0342\u0300\u0313\u0307\u0332\u0305'
         unclear_char = '\u0323'
-        other_valid_chars = '\u2CE8\U00010177'
+        other_valid_chars = '\u2CE8\U00010177 '
         special_chars = (milestone_chars + ex_chars + add_chars + gtype_chars + hi_chars + unclear_char
                          + other_valid_chars)
         pattern_allowed_chars = r'[' + special_chars + greek_output + r'\[\]\-\?' + r']'
